@@ -1,0 +1,42 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "adfavdemodamg7370"
+		},
+		"AzureKeyVault1_properties_typeProperties_baseUrl": {
+			"value": "https://kvt-avdemoadf.vault.azure.net/"
+		},
+		"ls_snow_chinook_properties_typeProperties_database": {
+			"value": "MEDIA_DB"
+		},
+		"ls_snow_chinook_properties_typeProperties_role": {
+			"value": "MEDIA_ROLE"
+		},
+		"ls_snow_chinook_properties_typeProperties_host": {
+			"value": "ALLNFNH-RIA14987.snowflakecomputing.com"
+		},
+		"ls_sqlserver_averma_properties_typeProperties_server": {
+			"value": "avsqlserver7370.database.windows.net"
+		},
+		"ls_sqlserver_averma_properties_typeProperties_database": {
+			"value": "azuresqldb_averma"
+		},
+		"ls_sqlserver_averma_properties_typeProperties_userName": {
+			"value": "fall2025"
+		},
+		"ls_storage_azure_blob_properties_typeProperties_serviceEndpoint": {
+			"value": "https://stgavdemodamg7370.blob.core.windows.net/"
+		},
+		"ls_storage_sas_auth_sasUri": {
+			"value": ""
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}

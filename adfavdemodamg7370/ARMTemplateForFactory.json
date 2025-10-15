@@ -1,0 +1,502 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "adfavdemodamg7370"
+		},
+		"AzureKeyVault1_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://kvt-avdemoadf.vault.azure.net/"
+		},
+		"ls_snow_chinook_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "MEDIA_DB"
+		},
+		"ls_snow_chinook_properties_typeProperties_role": {
+			"type": "string",
+			"defaultValue": "MEDIA_ROLE"
+		},
+		"ls_snow_chinook_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "ALLNFNH-RIA14987.snowflakecomputing.com"
+		},
+		"ls_sqlserver_averma_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "avsqlserver7370.database.windows.net"
+		},
+		"ls_sqlserver_averma_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "azuresqldb_averma"
+		},
+		"ls_sqlserver_averma_properties_typeProperties_userName": {
+			"type": "string",
+			"defaultValue": "fall2025"
+		},
+		"ls_storage_azure_blob_properties_typeProperties_serviceEndpoint": {
+			"type": "string",
+			"defaultValue": "https://stgavdemodamg7370.blob.core.windows.net/"
+		},
+		"ls_storage_sas_auth_sasUri": {
+			"type": "secureString",
+			"metadata": "Secure string for 'sasUri' of 'ls_storage_sas_auth'"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/Parquet_2_SnowStage_PL')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ForEachTable",
+						"type": "ForEach",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@pipeline().parameters.table_name",
+								"type": "Expression"
+							},
+							"batchCount": 2,
+							"activities": [
+								{
+									"name": "Parquet_2_Snow_Stage",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.00:10:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "ParquetSource",
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "ParquetReadSettings"
+											}
+										},
+										"sink": {
+											"type": "SnowflakeV2Sink",
+											"importSettings": {
+												"type": "SnowflakeImportCopyCommand",
+												"additionalCopyOptions": {
+													"ON_ERROR": "CONTINUE"
+												},
+												"additionalFormatOptions": {
+													"ERROR_ON_COLUMN_COUNT_MISMATCH": "FALSE"
+												}
+											}
+										},
+										"enableStaging": true,
+										"stagingSettings": {
+											"linkedServiceName": {
+												"referenceName": "ls_storage_sas_auth",
+												"type": "LinkedServiceReference"
+											},
+											"path": "stagedata"
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "Parquet_ds",
+											"type": "DatasetReference",
+											"parameters": {
+												"container_name": "stagedata",
+												"folder_name": {
+													"value": "@pipeline().parameters.folder_name",
+													"type": "Expression"
+												},
+												"file_name": {
+													"value": "@concat(\n    item(),\n    '.parquet'\n)",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "SnowChinook",
+											"type": "DatasetReference",
+											"parameters": {
+												"schema_name": "STAGE",
+												"table_name": {
+													"value": "@toUpper(item())",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"folder_name": {
+						"type": "string",
+						"defaultValue": "chinook"
+					},
+					"table_name": {
+						"type": "array",
+						"defaultValue": [
+							"Invoice",
+							"Invoiceline",
+							"Genre"
+						]
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-10-15T02:57:26Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/Parquet_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SnowChinook')]",
+				"[concat(variables('factoryId'), '/linkedServices/ls_storage_sas_auth')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/extract_SQLDB_PL')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ForEachSourceTable",
+						"type": "ForEach",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@pipeline().parameters.table_names_array",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"batchCount": 2,
+							"activities": [
+								{
+									"name": "sql_2_parquet",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.00:10:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobStorageWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"validateDataConsistency": true,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sqlserver_demo_ds",
+											"type": "DatasetReference",
+											"parameters": {
+												"schema_name": "chinook",
+												"table_name": {
+													"value": "@item()",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "Parquet_ds",
+											"type": "DatasetReference",
+											"parameters": {
+												"container_name": "stagedata",
+												"folder_name": "chinook",
+												"file_name": {
+													"value": "@concat(\n    item(),\n    '.parquet'\n)",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"table_names_array": {
+						"type": "array",
+						"defaultValue": [
+							"Invoice",
+							"Invoiceline",
+							"Genre"
+						]
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-10-15T02:57:26Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/sqlserver_demo_ds')]",
+				"[concat(variables('factoryId'), '/datasets/Parquet_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Parquet_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_storage_azure_blob",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"container_name": {
+						"type": "string"
+					},
+					"folder_name": {
+						"type": "string"
+					},
+					"file_name": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().file_name",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().folder_name",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@dataset().container_name",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_storage_azure_blob')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SnowChinook')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_snow_chinook",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schema_name": {
+						"type": "string"
+					},
+					"table_name": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schema_name",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().table_name",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_snow_chinook')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/sqlserver_demo_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ls_sqlserver_averma",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schema_name": {
+						"type": "string",
+						"defaultValue": "chinook"
+					},
+					"table_name": {
+						"type": "string",
+						"defaultValue": "Customer"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schema_name",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().table_name",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ls_sqlserver_averma')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/AzureKeyVault1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('AzureKeyVault1_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_snow_chinook')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "SnowflakeV2",
+				"typeProperties": {
+					"authenticationType": "Basic",
+					"accountIdentifier": "ALLNFNH-RIA14987",
+					"user": "AV_MEDIA_USER",
+					"database": "[parameters('ls_snow_chinook_properties_typeProperties_database')]",
+					"warehouse": "MEDIA_WH",
+					"role": "[parameters('ls_snow_chinook_properties_typeProperties_role')]",
+					"host": "[parameters('ls_snow_chinook_properties_typeProperties_host')]",
+					"password": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "AzureKeyVault1",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "snowChinookUserCredentials"
+					}
+				},
+				"version": "1.1"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureKeyVault1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_sqlserver_averma')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('ls_sqlserver_averma_properties_typeProperties_server')]",
+					"database": "[parameters('ls_sqlserver_averma_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "SQL",
+					"userName": "[parameters('ls_sqlserver_averma_properties_typeProperties_userName')]",
+					"password": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "AzureKeyVault1",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "sqlserver-credentials"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureKeyVault1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_storage_azure_blob')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"serviceEndpoint": "[parameters('ls_storage_azure_blob_properties_typeProperties_serviceEndpoint')]",
+					"accountKind": "StorageV2"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ls_storage_sas_auth')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"sasUri": "[parameters('ls_storage_sas_auth_sasUri')]"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
